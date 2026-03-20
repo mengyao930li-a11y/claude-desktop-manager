@@ -84,7 +84,7 @@ npm start
 > **🎉 彩蛋（强烈推荐）：一键生成桌面快捷方式！**
 > 
 > 以后不想每次都苦哈哈地打开命令窗口敲 `npm start`？
-> 只需在下载好的 `claude-desktop-manager` 文件夹中找到蓝色的 **`create_shortcut.ps1`**，**右键点击它 -> 选择“使用 PowerShell 运行”**。
+> 只需在下载好的 `claude-desktop-manager` 文件夹中找到 **`create_shortcut.bat`**，直接**双击运行它**！
 > 嘭！你的 Windows 桌面上就会立刻生成一个带有原生手感的应用图标供你随后双击使用了！（静默后台启动，不会弹出任何烦人的黑框哦~）
 
 ---
