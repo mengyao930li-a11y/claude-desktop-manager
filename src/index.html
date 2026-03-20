@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self';">
+  <title>Claude Code Manager</title>
+  <link rel="stylesheet" href="../dist/xterm.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- ─── Custom Titlebar ─── -->
+  <header id="titlebar">
+    <div class="titlebar-drag">
+      <svg class="titlebar-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+      </svg>
+      <span class="titlebar-title">Claude Code Manager</span>
+    </div>
+    <div class="titlebar-controls">
+      <button id="btn-minimize" class="titlebar-btn" aria-label="Minimize">
+        <svg viewBox="0 0 12 12" width="12" height="12"><line x1="1" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="1.2"/></svg>
+      </button>
+      <button id="btn-maximize" class="titlebar-btn" aria-label="Maximize">
+        <svg id="icon-maximize" viewBox="0 0 12 12" width="12" height="12"><rect x="1.5" y="1.5" width="9" height="9" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
+        <svg id="icon-restore" viewBox="0 0 12 12" width="12" height="12" style="display:none"><path d="M3.5 1.5h6a1 1 0 011 1v6M1.5 3.5h6a1 1 0 011 1v6a1 1 0 01-1 1h-6a1 1 0 01-1-1v-6a1 1 0 011-1z" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
+      </button>
+      <button id="btn-close" class="titlebar-btn titlebar-btn--close" aria-label="Close">
+        <svg viewBox="0 0 12 12" width="12" height="12"><line x1="2" y1="2" x2="10" y2="10" stroke="currentColor" stroke-width="1.2"/><line x1="10" y1="2" x2="2" y2="10" stroke="currentColor" stroke-width="1.2"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ─── Main Layout ─── -->
+  <div id="app">
+    <!-- Sidebar -->
+    <nav id="sidebar">
+      <div class="nav-items">
+        <button class="nav-btn active" data-view="dashboard" title="Dashboard">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          <span>Dashboard</span>
+        </button>
+        <button class="nav-btn" data-view="terminals" title="Terminals">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+          <span>Terminals</span>
+          <span class="nav-badge" id="terminal-count" style="display:none">0</span>
+        </button>
+        <button class="nav-btn" data-view="skills" title="Skills">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
+          <span>Skills</span>
+          <span class="nav-badge" id="skill-count" style="display:none">0</span>
+        </button>
+        <button class="nav-btn" data-view="settings" title="Settings">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+          <span>Settings</span>
+        </button>
+      </div>
+      <div class="nav-footer">
+        <div class="sidebar-model-select">
+          <label>Active Model</label>
+          <select id="sidebar-profile-select">
+            <option value="">-- No Profile --</option>
+          </select>
+        </div>
+        <div id="claude-status" class="status-indicator">
+          <span class="status-dot"></span>
+          <span class="status-text">Checking...</span>
+        </div>
+        <div id="claude-update-container" style="display:none; margin-top: 8px;">
+          <button class="btn btn-sm btn-primary" id="btn-update-claude" style="width: 100%; justify-content: center; font-size: 11px; padding: 4px;">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Update Available
+          </button>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Content Area -->
+    <main id="content">
+      <!-- ─── Dashboard View ─── -->
+      <section id="view-dashboard" class="view active">
+        <div class="view-header">
+          <div>
+            <h1>Workspaces</h1>
+            <p class="subtitle" id="workspace-count">Loading...</p>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-secondary" id="btn-import-workspace">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Import
+            </button>
+            <button class="btn btn-primary" id="btn-new-workspace">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              New Workspace
+            </button>
+          </div>
+        </div>
+
+        <div id="workspace-grid" class="workspace-grid">
+          <!-- Dynamic workspace cards -->
+        </div>
+
+        <div id="empty-state" class="empty-state" style="display:none">
+          <svg viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3">
+            <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+          </svg>
+          <h3>No Workspaces Yet</h3>
+          <p>Create a new workspace or import an existing directory to get started.</p>
+          <button class="btn btn-primary" id="btn-empty-new">Create Workspace</button>
+        </div>
+      </section>
+
+      <!-- ─── Terminals View ─── -->
+      <section id="view-terminals" class="view">
+        <div class="terminal-header">
+          <div class="terminal-tabs" id="terminal-tabs">
+            <!-- Dynamic tabs -->
+          </div>
+          <button class="btn btn-sm btn-ghost" id="btn-new-terminal" title="New Shell">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+        </div>
+        <div class="terminal-area" id="terminal-area">
+          <div class="terminal-empty" id="terminal-empty">
+            <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3">
+              <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+            </svg>
+            <p>No active terminals. Launch Claude Code from a workspace or open a new shell.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── Skills View ─── -->
+      <section id="view-skills" class="view">
+        <div class="view-header">
+          <div>
+            <h1>Skills</h1>
+            <p class="subtitle" id="skills-subtitle">Loading...</p>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-ghost" id="btn-open-skills-folder" title="Open skills folder">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+              Open Folder
+            </button>
+            <button class="btn btn-secondary" id="btn-install-skill-local">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Import Local
+            </button>
+            <button class="btn btn-primary" id="btn-install-skill-git">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><line x1="1.05" y1="12" x2="7" y2="12"/><line x1="17.01" y1="12" x2="22.96" y2="12"/></svg>
+              Git Install
+            </button>
+          </div>
+        </div>
+
+        <div id="skills-list" class="skills-list">
+          <!-- Dynamic skill cards -->
+        </div>
+
+        <div id="skills-empty" class="empty-state" style="display:none">
+          <svg viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3">
+            <path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/>
+          </svg>
+          <h3>No Skills Installed</h3>
+          <p>Install skills from a Git repository or import from a local directory to extend Claude Code's capabilities.</p>
+          <div style="display:flex;gap:10px;margin-top:8px">
+            <button class="btn btn-primary" id="btn-empty-git-install">Git Install</button>
+            <button class="btn btn-secondary" id="btn-empty-local-install">Import Local</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── Settings View ─── -->
+      <section id="view-settings" class="view">
+        <div class="view-header">
+          <h1>Settings</h1>
+        </div>
+        <div class="settings-scroll">
+          <!-- Model Profiles -->
+          <div class="settings-section-wide">
+            <div class="profile-section-header">
+              <h3>Model Profiles</h3>
+              <button class="btn btn-sm btn-primary" id="btn-add-profile">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add Profile
+              </button>
+            </div>
+            <div id="profile-grid" class="profile-grid">
+              <!-- Dynamic profile cards -->
+            </div>
+            <div id="profile-empty" class="profile-empty" style="display:none">
+              <p>No model profiles configured. Add a profile to connect Claude Code with your preferred AI provider.</p>
+            </div>
+          </div>
+
+          <!-- General + Terminal -->
+          <div class="settings-content">
+            <div class="settings-group">
+              <h3>General</h3>
+              <div class="setting-row">
+                <label for="setting-base-path">Default Workspace Path</label>
+                <div class="setting-input-group">
+                  <input type="text" id="setting-base-path" class="input" readonly>
+                  <button class="btn btn-sm btn-secondary" id="btn-browse-base">Browse</button>
+                </div>
+              </div>
+              <div class="setting-row">
+                <label for="setting-claude-path">Claude Command</label>
+                <input type="text" id="setting-claude-path" class="input" placeholder="claude">
+              </div>
+            </div>
+            <div class="settings-group">
+              <h3>Terminal</h3>
+              <div class="setting-row">
+                <label for="setting-font-size">Font Size</label>
+                <input type="number" id="setting-font-size" class="input input-sm" min="10" max="24" value="14">
+              </div>
+              <div class="setting-row">
+                <label for="setting-font-family">Font Family</label>
+                <input type="text" id="setting-font-family" class="input" placeholder="Cascadia Code, Consolas, monospace">
+              </div>
+            </div>
+            <div class="settings-actions">
+              <button class="btn btn-primary" id="btn-save-settings">Save Settings</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ─── New Workspace Modal ─── -->
+  <div class="modal-overlay" id="modal-new-workspace">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Create Workspace</h2>
+        <button class="modal-close" id="modal-close-new">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="ws-name">Project Name</label>
+          <input type="text" id="ws-name" class="input" placeholder="my-research-project" autofocus>
+        </div>
+        <div class="form-group">
+          <label for="ws-type">Type</label>
+          <div class="type-selector" id="ws-type-selector">
+            <button class="type-chip active" data-type="development">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              Development
+            </button>
+            <button class="type-chip" data-type="research">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              Research
+            </button>
+            <button class="type-chip" data-type="writing">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5z"/></svg>
+              Writing
+            </button>
+            <button class="type-chip" data-type="analysis">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+              Analysis
+            </button>
+            <button class="type-chip" data-type="general">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>
+              General
+            </button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="ws-description">Description</label>
+          <textarea id="ws-description" class="input textarea" rows="3" placeholder="Brief project description..."></textarea>
+        </div>
+        <div class="form-group">
+          <label for="ws-path">Location</label>
+          <div class="setting-input-group">
+            <input type="text" id="ws-path" class="input" readonly>
+            <button class="btn btn-sm btn-secondary" id="btn-browse-ws">Browse</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="ws-constraints">Custom Constraints (optional)</label>
+          <textarea id="ws-constraints" class="input textarea" rows="3" placeholder="- Follow PEP 8&#10;- Write tests first"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-cancel-ws">Cancel</button>
+        <button class="btn btn-primary" id="btn-create-ws">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Confirm Delete Modal ─── -->
+  <div class="modal-overlay" id="modal-confirm-delete">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h2>Delete Workspace</h2>
+        <button class="modal-close" id="modal-close-delete">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>Remove <strong id="delete-ws-name"></strong> from the manager?</p>
+        <label class="checkbox-label">
+          <input type="checkbox" id="delete-files-check">
+          <span>Also delete all files on disk</span>
+        </label>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-cancel-delete">Cancel</button>
+        <button class="btn btn-danger" id="btn-confirm-delete">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Git Install Modal ─── -->
+  <div class="modal-overlay" id="modal-git-install">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Install Skill from Git</h2>
+        <button class="modal-close" id="modal-close-git">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="git-url">Git Repository URL</label>
+          <input type="text" id="git-url" class="input" placeholder="https://github.com/user/skill-repo.git" autofocus>
+        </div>
+        <div class="skill-install-hint">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <span>Supports repos with SKILL.md at root or in subdirectories. Git must be installed and available in PATH.</span>
+        </div>
+        <div id="git-install-status" class="install-status" style="display:none"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-cancel-git">Cancel</button>
+        <button class="btn btn-primary" id="btn-confirm-git">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Install
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Skill Detail Modal ─── -->
+  <div class="modal-overlay" id="modal-skill-detail">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2 id="skill-detail-title">Skill Details</h2>
+        <button class="modal-close" id="modal-close-detail">&times;</button>
+      </div>
+      <div class="modal-body">
+        <pre class="skill-md-content" id="skill-detail-content"></pre>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-close-detail">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Confirm Delete Skill Modal ─── -->
+  <div class="modal-overlay" id="modal-confirm-delete-skill">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h2>Delete Skill</h2>
+        <button class="modal-close" id="modal-close-delete-skill">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>Are you sure you want to delete skill <strong id="delete-skill-name"></strong>?</p>
+        <p class="delete-warning">This will permanently remove the skill directory and all its files.</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-cancel-delete-skill">Cancel</button>
+        <button class="btn btn-danger" id="btn-confirm-delete-skill">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Profile Editor Modal ─── -->
+  <div class="modal-overlay" id="modal-profile-editor">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2 id="profile-editor-title">Add Model Profile</h2>
+        <button class="modal-close" id="modal-close-profile">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="profile-name">Profile Name</label>
+          <input type="text" id="profile-name" class="input" placeholder="My ZhiPu GLM-4" autofocus>
+        </div>
+
+        <div class="form-group">
+          <label>Provider</label>
+          <div class="provider-selector" id="provider-selector">
+            <!-- Dynamic provider chips -->
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="profile-base-url">Base URL</label>
+          <input type="text" id="profile-base-url" class="input input-mono" placeholder="https://api.example.com/v1">
+        </div>
+
+        <div class="form-group">
+          <label for="profile-api-key">API Key</label>
+          <div class="setting-input-group">
+            <input type="password" id="profile-api-key" class="input input-mono" placeholder="sk-xxxxx..." style="flex:1">
+            <button class="btn btn-sm btn-ghost" id="btn-toggle-key" title="Show/Hide" type="button">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="profile-models-section">
+          <label class="section-label">Model Configuration</label>
+          <div class="profile-model-grid">
+            <div class="form-group">
+              <label for="profile-model">Main Model</label>
+              <input type="text" id="profile-model" class="input input-mono" list="model-suggestions" placeholder="model-name">
+            </div>
+            <div class="form-group">
+              <label for="profile-opus">Opus Model</label>
+              <input type="text" id="profile-opus" class="input input-mono" list="model-suggestions" placeholder="same as main">
+            </div>
+            <div class="form-group">
+              <label for="profile-sonnet">Sonnet Model</label>
+              <input type="text" id="profile-sonnet" class="input input-mono" list="model-suggestions" placeholder="same as main">
+            </div>
+            <div class="form-group">
+              <label for="profile-haiku">Haiku Model</label>
+              <input type="text" id="profile-haiku" class="input input-mono" list="model-suggestions" placeholder="same as main">
+            </div>
+            <div class="form-group">
+              <label for="profile-subagent">Subagent Model</label>
+              <input type="text" id="profile-subagent" class="input input-mono" list="model-suggestions" placeholder="same as main">
+            </div>
+          </div>
+          <datalist id="model-suggestions"></datalist>
+          <div class="form-group" style="margin-top:12px">
+            <label for="profile-custom-env">Additional Environment Variables</label>
+            <textarea id="profile-custom-env" class="input textarea input-mono" rows="3" placeholder="API_TIMEOUT_MS=3000000&#10;CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1"></textarea>
+          </div>
+          <div class="profile-fill-hint">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span>Model fields default to Main Model if empty. Additional env vars use KEY=VALUE format, one per line. Injected as ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, etc.</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-cancel-profile">Cancel</button>
+        <button class="btn btn-primary" id="btn-save-profile">Save Profile</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Confirm Delete Profile Modal ─── -->
+  <div class="modal-overlay" id="modal-confirm-delete-profile">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h2>Delete Profile</h2>
+        <button class="modal-close" id="modal-close-delete-profile">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>Delete model profile <strong id="delete-profile-name"></strong>?</p>
+        <p class="delete-warning">Terminals already running will not be affected.</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-cancel-delete-profile">Cancel</button>
+        <button class="btn btn-danger" id="btn-confirm-delete-profile">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../dist/renderer.js"></script>
+</body>
+</html>

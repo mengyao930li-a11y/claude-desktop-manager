@@ -1,0 +1,23 @@
+{
+  "name": "claude-desktop-manager",
+  "version": "1.0.0",
+  "description": "Claude Code Desktop Manager - Launch and manage Claude Code sessions with full PTY terminal support",
+  "main": "main.js",
+  "scripts": {
+    "start": "node scripts/build.js && electron .",
+    "build": "node scripts/build.js",
+    "rebuild": "electron-rebuild -f -w node-pty",
+    "postinstall": "node scripts/patch-node-gyp.js && npm run rebuild"
+  },
+  "dependencies": {
+    "node-pty": "^1.0.0"
+  },
+  "devDependencies": {
+    "electron": "^34.0.0",
+    "@electron/rebuild": "^3.7.0",
+    "esbuild": "^0.24.0",
+    "@xterm/xterm": "^5.5.0",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/addon-web-links": "^0.11.0"
+  }
+}
