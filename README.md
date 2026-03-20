@@ -1,136 +1,43 @@
-# Claude Code Desktop Manager
+Claude Code Desktop Manager
+A powerful, open-source Electron-based GUI for Anthropic's Claude Code. This desktop manager provides an elegant, highly functional wrapper around the Claude CLI, designed specifically for developers who want a better local AI coding experience.
 
-A desktop application for managing Claude Code workspaces and sessions with **full terminal functionality**. Built with Electron + node-pty + xterm.js.
+✨ Key Features
+1. Visual Workspace Management
+Manage multiple project workspaces visually.
+One-click launch to open Claude Code within any workspace.
+Seamlessly resume previous Claude Code sessions to maintain context (--continue integration).
+2. Built-in PTY Terminal
+Full xterm.js integration directly within the UI.
+No need to open separate external terminal windows.
+Execute raw shell commands or chat with Claude Code natively with syntax highlighting and perfect rendering.
+3. Ultimate API Provider Switching
+Intelligently manages Claude Code's environment variables (ANTHROPIC_BASE_URL, ANTHROPIC_API_KEY, etc.).
+Pre-configured defaults for natively interacting with standard and custom Anthropic-compatible APIs:
+Anthropic (Official)
+DeepSeek (深度求索)
+Kimi / Moonshot (月之暗面)
+Qwen (阿里云百炼)
+SiliconFlow (硅基流动)
+MiniMax (海螺AI)
+OpenRouter (Multi-model routing)
+Gemini (Google AI)
+Special handling for unique API auth requirements (e.g., OpenRouter token mapping).
+4. Skill Management UI
+Visually browse, install, and delete Claude Code Skills.
+Supports 1-click Git installation or importing local skill directories.
+5. Auto-Updater
+The manager operates in the background to automatically check NPM for new @anthropic-ai/claude-code core package releases.
+Installs updates globally with a single click from the UI.
+🚀 Why Open Source This?
+Claude Code is a revolutionary CLI tool, but handling environment variables, switching between model providers (like DeepSeek or Kimi for cost savings), and managing isolated projects in the terminal can be tedious.
 
-## Architecture: Why node-pty?
+This Desktop Manager completely solves those pain points by wrapping the CLI in a beautiful, responsive GUI. Open-sourcing this project on GitHub will directly help thousands of developers who want to use Claude Code locally with alternative, highly-capable models, without struggling with bash scripts or terminal configs.
 
-Claude Code is a full terminal application that requires a real PTY (pseudo-terminal) to function correctly. Simple `child_process.spawn` with piped stdio **breaks** Claude Code's interactive features:
+🛠️ Tech Stack
+Core: Electron, Node.js
+Frontend: Vanilla HTML/JS/CSS, esbuild
+Terminal System: node-pty, xterm.js
+Ready for GitHub: The codebase is well-structured, doesn't rely on bloated front-end frameworks, and handles complex process management smoothly. Add some setup instructions to this 
+README.md
+, and it's absolutely ready for the public!
 
-- ANSI color rendering
-- Cursor movement and inline editing
-- Tool approval prompts
-- Progress indicators
-- Multi-line input
-
-This app uses **node-pty** to create real pseudo-terminals, and **xterm.js** to render them in the browser. Claude Code runs unmodified with **100% feature parity**.
-
-```
-┌─────────────────────────────────────────┐
-│  Electron (Renderer)                    │
-│  ┌───────────────┐                      │
-│  │   xterm.js    │ ◄── full terminal    │
-│  │               │     rendering        │
-│  └───────┬───────┘                      │
-│          │ IPC (keystrokes / data)       │
-├──────────┼──────────────────────────────┤
-│  Electron (Main)                        │
-│  ┌───────┴───────┐                      │
-│  │   node-pty    │ ◄── real PTY         │
-│  │               │     (pseudo-terminal)│
-│  └───────┬───────┘                      │
-│          │                              │
-│  ┌───────┴───────┐                      │
-│  │  Claude Code  │ ◄── runs unmodified  │
-│  │  (full CLI)   │     100% features    │
-│  └───────────────┘                      │
-└─────────────────────────────────────────┘
-```
-
-## Prerequisites
-
-1. **Node.js** >= 18 (https://nodejs.org)
-2. **Claude Code** CLI installed and available in PATH (`npm install -g @anthropic-ai/claude-code`)
-3. **Visual Studio Build Tools** with "Desktop development with C++" workload (for node-pty native compilation)
-
-## Installation
-
-```powershell
-cd claude-desktop-manager
-npm install
-```
-
-The `postinstall` script automatically:
-1. Patches node-gyp for VS 2025 compatibility (if needed)
-2. Rebuilds `node-pty` for Electron's Node.js version
-
-**Note for VS 2025 users**: The `scripts/patch-node-gyp.js` script automatically adds VS 18 (2025) support and disables Spectre mitigation requirement. If you use VS 2022 or older, the patch is harmless.
-
-If `postinstall` fails, you may need to set the `VCTargetsPath` environment variable:
-```powershell
-$env:VCTargetsPath = "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\MSBuild\Microsoft\VC\v180\"
-npm run rebuild
-```
-
-## Usage
-
-```powershell
-npm start
-```
-
-### Features
-
-- **Workspace Management**: Create project workspaces with auto-generated directory structure and CLAUDE.md configuration
-- **One-Click Claude Launch**: Launch Claude Code in any workspace with a single click
-- **Multiple Terminal Tabs**: Run multiple Claude Code sessions simultaneously
-- **Full Terminal Support**: 256-color, Unicode, cursor movement, interactive prompts — everything works
-- **Shell Access**: Open plain shell terminals alongside Claude Code
-- **Session Tracking**: Automatic session history per workspace
-- **Import Existing Projects**: Import any directory as a workspace
-
-### Auto-Generated Workspace Structure
-
-```
-workspace-name/
-├── .claude/
-│   ├── CLAUDE.md        # Project instructions for Claude Code
-│   └── skills/          # Project-specific skills
-├── context/
-│   ├── requirements.md  # Project requirements
-│   ├── research/        # Research materials
-│   └── references/      # Reference files
-├── sessions/
-│   └── archive/         # Session history
-└── output/              # Build artifacts
-```
-
-## Development
-
-```powershell
-# Build renderer bundle
-npm run build
-
-# Start app
-npm start
-
-# Rebuild native modules after Electron version change
-npm run rebuild
-```
-
-## Packaging (Production)
-
-To package as a standalone desktop app, add electron-builder:
-
-```powershell
-npm install --save-dev electron-builder
-```
-
-Add to package.json:
-```json
-{
-  "build": {
-    "appId": "com.claude.desktop-manager",
-    "productName": "Claude Code Manager",
-    "files": ["main.js", "preload.js", "src/**/*", "dist/**/*"],
-    "win": { "target": "nsis" }
-  }
-}
-```
-
-Then build:
-```powershell
-npx electron-builder --win
-```
-
-## License
-
-MIT
