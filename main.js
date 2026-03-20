@@ -577,6 +577,45 @@ async function findSubSkills(dir) {
   return results;
 }
 
+async function findSkillDirectories(dir, maxDepth = 3, currentDepth = 0) {
+  if (currentDepth > maxDepth) return [];
+  const results = [];
+  try {
+    const entries = await fsp.readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
+      const subDir = path.join(dir, entry.name);
+      try {
+        await fsp.access(path.join(subDir, 'SKILL.md'));
+        results.push(subDir);
+      } catch {
+        const deeper = await findSkillDirectories(subDir, maxDepth, currentDepth + 1);
+        results.push(...deeper);
+      }
+    }
+  } catch {}
+  return results;
+}
+
+async function copyDir(src, dest, ignoreList = []) {
+  if (ignoreList.length === 0) {
+    await fsp.cp(src, dest, { recursive: true, force: true });
+    return;
+  }
+  await fsp.mkdir(dest, { recursive: true });
+  const entries = await fsp.readdir(src, { withFileTypes: true });
+  for (const entry of entries) {
+    if (ignoreList.includes(entry.name)) continue;
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      await copyDir(srcPath, destPath, ignoreList);
+    } else {
+      await fsp.copyFile(srcPath, destPath);
+    }
+  }
+}
+
 ipcMain.handle('get-skill-detail', async (_, skillName) => {
   const skillMd = path.join(getGlobalSkillsPath(), skillName, 'SKILL.md');
   try {
@@ -612,16 +651,12 @@ ipcMain.handle('install-skill-git', async (_, gitUrl) => {
           await copyDir(tmpDir, dest, ['.git']);
           installed.push(repoName);
         } catch {
-          const entries = await fsp.readdir(tmpDir, { withFileTypes: true });
-          for (const entry of entries) {
-            if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
-            const subSkillMd = path.join(tmpDir, entry.name, 'SKILL.md');
-            try {
-              await fsp.access(subSkillMd);
-              const dest = path.join(skillsDir, entry.name);
-              await copyDir(path.join(tmpDir, entry.name), dest, ['.git']);
-              installed.push(entry.name);
-            } catch {}
+          const foundSkillDirs = await findSkillDirectories(tmpDir, 3);
+          for (const dir of foundSkillDirs) {
+            const skillName = path.basename(dir);
+            const dest = path.join(skillsDir, skillName);
+            await copyDir(dir, dest, ['.git']);
+            if (!installed.includes(skillName)) installed.push(skillName);
           }
         }
 

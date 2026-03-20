@@ -852,6 +852,8 @@ body {
 .skills-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  align-content: start;
+  align-items: start;
   gap: 14px;
   padding: 8px 32px 32px;
   overflow-y: auto;
