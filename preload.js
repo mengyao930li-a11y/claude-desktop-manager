@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, clipboard } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
   // Window
@@ -37,8 +37,13 @@ contextBridge.exposeInMainWorld('api', {
   checkClaudeUpdate: () => ipcRenderer.invoke('check-claude-update'),
 
   // Sessions
-  recordSession: (o) => ipcRenderer.invoke('record-session', o),
-  endSession:    (o) => ipcRenderer.invoke('end-session', o),
+  recordSession:     (o) => ipcRenderer.invoke('record-session', o),
+  endSession:        (o) => ipcRenderer.invoke('end-session', o),
+  getSessionContext: (p) => ipcRenderer.invoke('get-session-context', p),
+
+  // Clipboard
+  clipboardRead:  () => clipboard.readText(),
+  clipboardWrite: (text) => clipboard.writeText(text),
 
   // Skills
   getSkillsPath:    () => ipcRenderer.invoke('get-skills-path'),

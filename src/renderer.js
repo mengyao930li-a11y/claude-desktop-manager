@@ -42,6 +42,8 @@ const dom = {
   modalSkillDetail: $('#modal-skill-detail'),
   modalDeleteSkill: $('#modal-confirm-delete-skill'),
 
+  modalSessionContext: $('#modal-session-context'),
+
   modalProfileEditor: $('#modal-profile-editor'),
   modalDeleteProfile: $('#modal-confirm-delete-profile'),
   profileGrid:        $('#profile-grid'),
@@ -132,6 +134,9 @@ function cardHTML(w) {
           Resume
         </button>
         ` : ''}
+        <button class="btn btn-sm btn-secondary" data-action="context" data-id="${w.id}" title="View last session context">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>
+        </button>
         <button class="btn btn-sm btn-secondary" data-action="shell" data-id="${w.id}">Shell</button>
         <button class="btn btn-sm btn-ghost" data-action="folder" data-id="${w.id}" title="Open folder">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
@@ -158,6 +163,9 @@ async function handleCardAction(action, wsId) {
       break;
     case 'shell':
       await openTerminalForWorkspace(ws, false);
+      break;
+    case 'context':
+      await showSessionContext(ws);
       break;
     case 'folder':
       window.api.openInExplorer(ws.path);
@@ -268,6 +276,44 @@ async function openTerminalForWorkspace(ws, launchClaude, customClaudeArgs = nul
       // Send initial size to PTY
       window.api.terminalResize({ id, cols: xterm.cols, rows: xterm.rows });
     });
+  });
+
+  // Clipboard: Ctrl+V paste, Ctrl+Shift+C copy, right-click menu
+  xterm.attachCustomKeyEventHandler((ev) => {
+    if (ev.type !== 'keydown') return true;
+
+    // Ctrl+V → paste
+    if (ev.ctrlKey && !ev.shiftKey && ev.key === 'v') {
+      const text = window.api.clipboardRead();
+      if (text) window.api.terminalInput({ id, data: text });
+      return false;
+    }
+
+    // Ctrl+Shift+C → copy selection
+    if (ev.ctrlKey && ev.shiftKey && ev.key === 'C') {
+      const sel = xterm.getSelection();
+      if (sel) window.api.clipboardWrite(sel);
+      return false;
+    }
+
+    // Ctrl+C → if selection exists: copy; otherwise send SIGINT
+    if (ev.ctrlKey && !ev.shiftKey && ev.key === 'c') {
+      const sel = xterm.getSelection();
+      if (sel) {
+        window.api.clipboardWrite(sel);
+        xterm.clearSelection();
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  // Right-click context menu for copy/paste
+  container.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    const sel = xterm.getSelection();
+    showTerminalContextMenu(e.clientX, e.clientY, sel, id, xterm);
   });
 
   // Forward keystrokes to PTY
@@ -459,7 +505,7 @@ async function checkClaudeStatus() {
       const latestVersion = await window.api.checkClaudeUpdate();
       if (latestVersion && res.version && latestVersion !== res.version) {
         dom.updateContainer.style.display = 'block';
-        dom.btnUpdate.innerHTML = `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Install v${latestVersion}`;
+        dom.btnUpdate.innerHTML = `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Update to v${latestVersion}`;
       } else {
         dom.updateContainer.style.display = 'none';
       }
@@ -571,6 +617,13 @@ function bindEvents() {
     if (e.target === dom.modalDeleteProfile) dom.modalDeleteProfile.classList.remove('open');
   });
 
+  // Session context modal
+  $('#modal-close-session').addEventListener('click', () => dom.modalSessionContext.classList.remove('open'));
+  $('#btn-close-session').addEventListener('click', () => dom.modalSessionContext.classList.remove('open'));
+  dom.modalSessionContext.addEventListener('click', (e) => {
+    if (e.target === dom.modalSessionContext) dom.modalSessionContext.classList.remove('open');
+  });
+
   // Skills
   $('#btn-install-skill-git').addEventListener('click', openGitInstallModal);
   $('#btn-install-skill-local').addEventListener('click', installSkillLocal);
@@ -612,6 +665,7 @@ function bindEvents() {
       if (dom.modalGitInstall.classList.contains('open')) dom.modalGitInstall.classList.remove('open');
       if (dom.modalSkillDetail.classList.contains('open')) dom.modalSkillDetail.classList.remove('open');
       if (dom.modalDeleteSkill.classList.contains('open')) dom.modalDeleteSkill.classList.remove('open');
+      if (dom.modalSessionContext.classList.contains('open')) dom.modalSessionContext.classList.remove('open');
       if (dom.modalProfileEditor.classList.contains('open')) dom.modalProfileEditor.classList.remove('open');
       if (dom.modalDeleteProfile.classList.contains('open')) dom.modalDeleteProfile.classList.remove('open');
     }
@@ -637,6 +691,104 @@ function timeAgo(iso) {
   const day = Math.floor(hr / 24);
   if (day < 30)  return `${day}d ago`;
   return new Date(iso).toLocaleDateString();
+}
+
+// ─── Terminal Context Menu ────────────────────────────────────────────────
+
+function showTerminalContextMenu(x, y, selectedText, termId, xterm) {
+  removeContextMenu();
+
+  const menu = document.createElement('div');
+  menu.className = 'ctx-menu';
+  menu.id = 'terminal-ctx-menu';
+
+  const items = [];
+  if (selectedText) {
+    items.push({ label: 'Copy', icon: 'M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2', action: () => { window.api.clipboardWrite(selectedText); xterm.clearSelection(); }});
+  }
+  items.push({ label: 'Paste', icon: 'M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2', action: () => { const text = window.api.clipboardRead(); if (text) window.api.terminalInput({ id: termId, data: text }); }});
+  items.push({ label: 'Select All', icon: 'M4 7V4h16v3M9 20h6M12 4v16', action: () => xterm.selectAll() });
+
+  menu.innerHTML = items.map(it => `
+    <button class="ctx-item">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="${it.icon}"/></svg>
+      ${it.label}
+    </button>
+  `).join('');
+
+  document.body.appendChild(menu);
+
+  const btns = menu.querySelectorAll('.ctx-item');
+  items.forEach((it, i) => {
+    btns[i].addEventListener('click', () => { it.action(); removeContextMenu(); });
+  });
+
+  const rect = menu.getBoundingClientRect();
+  if (x + rect.width > window.innerWidth) x = window.innerWidth - rect.width - 8;
+  if (y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 8;
+  menu.style.left = `${x}px`;
+  menu.style.top = `${y}px`;
+
+  setTimeout(() => {
+    document.addEventListener('click', removeContextMenu, { once: true });
+    document.addEventListener('contextmenu', removeContextMenu, { once: true });
+  }, 0);
+}
+
+function removeContextMenu() {
+  const m = document.getElementById('terminal-ctx-menu');
+  if (m) m.remove();
+}
+
+// ─── Session Context ─────────────────────────────────────────────────────
+
+async function showSessionContext(ws) {
+  const modal = dom.modalSessionContext;
+  const body = $('#session-context-body');
+  const title = $('#session-context-title');
+
+  title.textContent = `${ws.name} - Last Session`;
+  body.innerHTML = '<p class="session-loading">Loading session context...</p>';
+  modal.classList.add('open');
+
+  const ctx = await window.api.getSessionContext(ws.path);
+
+  if (!ctx) {
+    body.innerHTML = `
+      <div class="session-empty-ctx">
+        <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3">
+          <circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/>
+        </svg>
+        <p>No previous session data found for this workspace.</p>
+      </div>`;
+    return;
+  }
+
+  const userMsgsHtml = ctx.userMessages.length > 0
+    ? ctx.userMessages.map(m =>
+      `<div class="session-msg session-msg-user"><span class="session-role">You</span><span class="session-text">${esc(m)}</span></div>`
+    ).join('')
+    : '<p class="text-muted">No user messages found</p>';
+
+  const assistantHtml = ctx.lastAssistantSnippet
+    ? `<div class="session-msg session-msg-assistant"><span class="session-role">Claude</span><span class="session-text">${esc(ctx.lastAssistantSnippet)}</span></div>`
+    : '';
+
+  body.innerHTML = `
+    <div class="session-meta">
+      <div class="session-meta-item">
+        <span class="session-meta-label">Last active</span>
+        <span class="session-meta-value">${esc(ctx.sessionDate)}</span>
+      </div>
+      <div class="session-meta-item">
+        <span class="session-meta-label">Total sessions</span>
+        <span class="session-meta-value">${ctx.totalSessions}</span>
+      </div>
+    </div>
+    <h4 class="session-section-title">Conversation Topics</h4>
+    <div class="session-msgs-list">${userMsgsHtml}</div>
+    ${assistantHtml ? `<h4 class="session-section-title">Last Claude Response</h4>${assistantHtml}` : ''}
+  `;
 }
 
 // ─── Skills Management ───────────────────────────────────────────────────────
@@ -811,9 +963,9 @@ const MODEL_PROVIDERS = [
     id: 'zhipu', name: '智谱 GLM', desc: 'ZhiPu Coding Plan',
     baseUrl: 'https://open.bigmodel.cn/api/anthropic',
     color: '#8b5cf6',
-    models: ['GLM-4.7', 'GLM-4.5-Air', 'glm-5'],
-    defaultModel: 'GLM-4.7',
-    defaultSlots: { opus: 'GLM-4.7', sonnet: 'GLM-4.7', haiku: 'GLM-4.5-Air' },
+    models: ['glm-5.1', 'GLM-4.7', 'GLM-4.5-Air', 'glm-5'],
+    defaultModel: 'glm-5.1',
+    defaultSlots: { opus: 'glm-5.1', sonnet: 'glm-5.1', haiku: 'GLM-4.5-Air', subagent: 'glm-5.1' },
     defaultCustomEnv: 'API_TIMEOUT_MS=3000000\nCLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1',
   },
   {

@@ -477,6 +477,88 @@ ipcMain.handle('check-claude-update', () => {
   });
 });
 
+// ─── Session Context (Last Session Memory) ────────────────────────────────────
+
+function workspacePathToClaudeDir(wsPath) {
+  return wsPath.replace(/[:\\/]/g, '-');
+}
+
+ipcMain.handle('get-session-context', async (_, wsPath) => {
+  try {
+    const dirName = workspacePathToClaudeDir(wsPath);
+    const projectDir = path.join(os.homedir(), '.claude', 'projects', dirName);
+
+    let stat;
+    try { stat = await fsp.stat(projectDir); } catch { return null; }
+    if (!stat.isDirectory()) return null;
+
+    const files = (await fsp.readdir(projectDir))
+      .filter(f => f.endsWith('.jsonl'));
+    if (files.length === 0) return null;
+
+    const fileMeta = await Promise.all(files.map(async (f) => {
+      const s = await fsp.stat(path.join(projectDir, f));
+      return { name: f, mtime: s.mtimeMs };
+    }));
+    fileMeta.sort((a, b) => b.mtime - a.mtime);
+
+    const latest = fileMeta[0];
+    const content = await fsp.readFile(path.join(projectDir, latest.name), 'utf-8');
+    const lines = content.split('\n').filter(Boolean);
+
+    const userMessages = [];
+    const assistantSnippets = [];
+
+    for (const line of lines) {
+      try {
+        const obj = JSON.parse(line);
+        if (obj.type === 'user' && obj.message?.content) {
+          let text = '';
+          if (typeof obj.message.content === 'string') {
+            text = obj.message.content;
+          } else if (Array.isArray(obj.message.content)) {
+            const part = obj.message.content.find(p => p.type === 'text');
+            if (part) text = part.text;
+          }
+          text = text.replace(/<[^>]+>/g, '').trim();
+          if (text && text.length > 2 && !text.startsWith('#') && !text.startsWith('<command')) {
+            userMessages.push(text.slice(0, 200));
+          }
+        }
+        if (obj.type === 'assistant' && obj.message?.content) {
+          let text = '';
+          if (typeof obj.message.content === 'string') {
+            text = obj.message.content;
+          } else if (Array.isArray(obj.message.content)) {
+            const part = obj.message.content.find(p => p.type === 'text');
+            if (part) text = part.text;
+          }
+          text = text.replace(/<[^>]+>/g, '').trim();
+          if (text && text.length > 10) {
+            assistantSnippets.push(text.slice(0, 300));
+          }
+        }
+      } catch {}
+    }
+
+    const sessionDate = new Date(latest.mtime).toLocaleString();
+    const sessionId = latest.name.replace('.jsonl', '');
+
+    return {
+      sessionId,
+      sessionDate,
+      totalSessions: files.length,
+      userMessages: userMessages.slice(0, 5),
+      lastAssistantSnippet: assistantSnippets.length > 0
+        ? assistantSnippets[assistantSnippets.length - 1]
+        : null,
+    };
+  } catch (err) {
+    console.error('Failed to get session context:', err);
+    return null;
+  }
+});
+
 // ─── Session Tracking ─────────────────────────────────────────────────────────
 
 ipcMain.handle('record-session', async (_, { workspaceId, terminalId }) => {

@@ -66,8 +66,8 @@
           <span class="status-dot"></span>
           <span class="status-text">Checking...</span>
         </div>
-        <div id="claude-update-container" style="display:none; margin-top: 8px;">
-          <button class="btn btn-sm btn-primary" id="btn-update-claude" style="width: 100%; justify-content: center; font-size: 11px; padding: 4px;">
+        <div id="claude-update-container" class="update-container">
+          <button class="btn btn-sm btn-update" id="btn-update-claude">
             <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             Update Available
           </button>
@@ -463,6 +463,22 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" id="btn-cancel-delete-profile">Cancel</button>
         <button class="btn btn-danger" id="btn-confirm-delete-profile">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Session Context Modal ─── -->
+  <div class="modal-overlay" id="modal-session-context">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2 id="session-context-title">Last Session Context</h2>
+        <button class="modal-close" id="modal-close-session">&times;</button>
+      </div>
+      <div class="modal-body" id="session-context-body">
+        <p>Loading...</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-close-session">Close</button>
       </div>
     </div>
   </div>
